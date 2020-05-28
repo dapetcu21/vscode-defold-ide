@@ -1,5 +1,6 @@
 {
 	"name": "defold-ide",
+	"publisher": "dapetcu21",
 	"displayName": "Defold IDE",
 	"description": "Up-to-date autocomplete, API docs, snippets and more for the Defold game engine",
 	"version": "0.0.1",
@@ -9,6 +10,7 @@
 	"categories": [
 		"Other"
 	],
+	"icon": "images/icon.png",
 	"activationEvents": [
 		"onCommand:defold-ide.refactorHash"
 	],
