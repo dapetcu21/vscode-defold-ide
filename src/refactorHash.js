@@ -121,6 +121,7 @@ function registerRefactorHashCommand(context) {
             if (wordSelection && wordSelection.isSingleLine) {
                 const word = editor.document.getText(wordSelection)
                     .replace(/^['"]|['"]$/g, '')
+                    .replace(/^h_/, '')
                 hashes.push(word)
             }
         })
