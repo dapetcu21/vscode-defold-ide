@@ -65,7 +65,7 @@ function insertLocalHashDeclaration(document: TextDocument, edit: WorkspaceEdit,
 	edit.insert(document.uri, document.positionAt(insertPoint), insertString)
 }
 
-function insertModuleHashDeclaration(document: TextDocument, fileUri: Uri, edit: WorkspaceEdit, hashIdentifier: string, string: string, fileDoesNotExist: boolean) {
+function insertModuleHashDeclaration(document: TextDocument | undefined, fileUri: Uri, edit: WorkspaceEdit, hashIdentifier: string, string: string, fileDoesNotExist: boolean) {
 	let insertPoint = -1
 	let newlinesBefore = 0
 	let newlinesAfter = 0
@@ -74,7 +74,7 @@ function insertModuleHashDeclaration(document: TextDocument, fileUri: Uri, edit:
 		insertPoint = 0
 		newlinesBefore = 0
 		newlinesAfter = 1
-	} else {
+	} else if (document) {
 		const text = document.getText()
 
 		// Try inserting the declaration after existing declarations
@@ -92,7 +92,7 @@ function insertModuleHashDeclaration(document: TextDocument, fileUri: Uri, edit:
 		if (insertPoint === -1) {
 			const match = text.match(/return\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/)
 			if (match) {
-				insertPoint = match.index
+				insertPoint = (match.index as number)
 				newlinesBefore = 0
 				newlinesAfter = 2
 			}
@@ -195,14 +195,17 @@ function hashDeclarationAlreadyExists(document: TextDocument, hashIdentifier: st
 }
 
 async function getModuleUri(modulePath: string, editor: TextEditor) {
-	let workspaceFolder = workspace.workspaceFolders.length === 1 ? workspace.workspaceFolders[0] : null
+	let workspaceFolder = (workspace.workspaceFolders && workspace.workspaceFolders.length === 1) 
+		? workspace.workspaceFolders[0] 
+		: null
+
 	if (!editor.document.isUntitled) {
 		workspaceFolder = workspace.getWorkspaceFolder(editor.document.uri) || workspaceFolder
 	}
 
 	if (!workspaceFolder) {
 		window.showErrorMessage("It's ambiguous which workspace folder defoldIDE.refactorHash.modulePath refers to. Save this file first.")
-		return
+		return null
 	}
 
 	const workspaceUri = workspaceFolder.uri
@@ -217,15 +220,15 @@ function registerRefactorHashCommand(context: ExtensionContext) {
 		const document = editor.document
 
 		const config = workspace.getConfiguration("defoldIDE.refactorHash")
-		const prefix: string = config.get("prefix")
-		const capitalise: boolean = config.get("capitalise")
-		const modulePath: string = config.get("modulePath")
-		const moduleRequireBinding: string = config.get("moduleRequireBinding")
+		const prefix: string = config.get("prefix") || ''
+		const capitalise: boolean = !!config.get("capitalise")
+		const modulePath: string = config.get("modulePath") || ''
+		const moduleRequireBinding: string = config.get("moduleRequireBinding") || 'h'
 
 		const edit = new WorkspaceEdit()
 
-		let moduleUri: Uri
-		let moduleDocument: TextDocument
+		let moduleUri: Uri | null = null
+		let moduleDocument: TextDocument | undefined = undefined
 		let fileDoesNotExist = false
 		if (modulePath) {
 			moduleUri = await getModuleUri(modulePath, editor)
@@ -246,7 +249,12 @@ function registerRefactorHashCommand(context: ExtensionContext) {
 			}
 		}
 
-		const hashes = []
+		const hashes: { 
+			hash: string, 
+			hashIdentifier: string, 
+			stringSingleQuoted: string, 
+			stringDoubleQuoted: string,
+		}[] = []
 		editor.selections.forEach(selection => {
 			const wordSelection = selection.isEmpty
 				? document.getWordRangeAtPosition(selection.start)
@@ -294,7 +302,7 @@ function registerRefactorHashCommand(context: ExtensionContext) {
 			}
 
 			hashes.forEach(({ hashIdentifier, stringDoubleQuoted }) => {
-				insertModuleHashDeclaration(moduleDocument, moduleUri, edit, hashIdentifier, stringDoubleQuoted, fileDoesNotExist)
+				insertModuleHashDeclaration(moduleDocument, (moduleUri as Uri), edit, hashIdentifier, stringDoubleQuoted, fileDoesNotExist)
 			})
 
 			if (fileDoesNotExist) {
