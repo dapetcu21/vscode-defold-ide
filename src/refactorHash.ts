@@ -132,7 +132,6 @@ function registerRefactorHashCommand(context: ExtensionContext) {
         
 		if (!hashes.length) { return }
 
-
 		editor.edit(editBuilder => {
 			hashes.forEach(hash => {
 				const stringDoubleQuoted = '"' + escapeLua(hash) + '"'
