@@ -41,6 +41,16 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Capitalize hash constants."
+				},
+				"defoldIDE.refactorHash.modulePath": {
+					"type": "string",
+					"default": "",
+					"description": "To add hash constants to a separate Lua module, specify the path to the Lua file, relative to the workspace. Leave blank to add constants as local variables."
+				},
+				"defoldIDE.refactorHash.moduleRequireBinding": {
+					"type": "string",
+					"default": "h",
+					"markdownDescription": "When using `modulePath`, the name of the local variable to assign the `require()`-d module to."
 				}
 			}
 		}
