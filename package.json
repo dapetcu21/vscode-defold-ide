@@ -28,7 +28,22 @@
 				"command": "defold-ide.refactorHash",
 				"when": "editorTextFocus && editorLangId == lua"
 			}
-		]
+		],
+		"configuration":{
+			"title": "Defold IDE",
+			"properties": {
+				"defoldIDE.refactorHash.prefix": {
+					"type": "string",
+					"default": "h_",
+					"description": "Prefix to add when naming hash constants."
+				},
+				"defoldIDE.refactorHash.capitalise": {
+					"type": "boolean",
+					"default": false,
+					"description": "Capitalize hash constants."
+				}
+			}
+		}
 	},
 	"scripts": {
 		"lint": "eslint .",

@@ -20,7 +20,7 @@ function escapeLua(s) {
  * @param {string} hashIdentifier
  * @param {string | any[]} string
  */
-function addHashDeclaration(editor, editBuilder, hashIdentifier, string) {
+function insertLocalHashDeclaration(editor, editBuilder, hashIdentifier, string) {
 	const text = editor.document.getText()
 
 	let insertPoint = -1
@@ -29,8 +29,9 @@ function addHashDeclaration(editor, editBuilder, hashIdentifier, string) {
 
 	// Try inserting the declaration after existing declarations
 	// @ts-ignore
-	for (const match of text.matchAll(/h_[0-9a-zA-Z_]* = hash\(("[^\r\n]*)/g)) {
-		if (match[1].substring(0, string.length) === string) {
+	for (const match of text.matchAll(/(^|\n)local [a-zA-Z_][0-9a-zA-Z_]* = hash\(("[^\r\n]*)/g)) {
+		console.log(match)
+		if (match[2].substring(0, string.length) === string) {
 			return
 		}
 		insertPoint = match.index + match[0].length
@@ -104,6 +105,11 @@ function replaceInDocument(editor, editBuilder, from, to) {
 	}
 }
 
+function hashDeclarationAlreadyExists(editor, hashIdentifier) {
+	const text = editor.document.getText()
+	return new RegExp(`(^|\\n)local\\s+${hashIdentifier}\\s*=\\s*hash\\(`).test(text)
+}
+
 /**
  * @param {import("vscode").ExtensionContext} context
  */
@@ -112,30 +118,41 @@ function registerRefactorHashCommand(context) {
 		const editor = vscode.window.activeTextEditor
 		if (!editor) { return }
 
+		const config = vscode.workspace.getConfiguration("defoldIDE.refactorHash")
+		const prefix = config.get("prefix")
+		const capitalise = config.get("capitalise")
+
         const hashes = []
 		editor.selections.forEach(selection => {
 			const wordSelection = selection.isEmpty
 				? editor.document.getWordRangeAtPosition(selection.start)
                 : selection
                 
-            if (wordSelection && wordSelection.isSingleLine) {
-                const word = editor.document.getText(wordSelection)
-                    .replace(/^['"]|['"]$/g, '')
-                    .replace(/^h_/, '')
-                hashes.push(word)
-            }
+			if (!wordSelection || !wordSelection.isSingleLine) { return }
+
+			let word = editor.document.getText(wordSelection)
+				.replace(/^['"]|['"]$/g, '')
+
+			if (prefix && word.substr(0, prefix.length) == prefix) {
+				word = word.substr(prefix.length)
+			}
+
+			hashes.push(word)
         })
         
-        if (!hashes.length) { return }
+		if (!hashes.length) { return }
+
 
 		editor.edit(editBuilder => {
 			hashes.forEach(hash => {
 				const stringDoubleQuoted = '"' + escapeLua(hash) + '"'
 				const stringSingleQuoted = '\'' + escapeLua(hash) + '\''
 				const identifier = hash.replace(/[^0-9a-zA-Z_]/g, '_')
-				const hashIdentifier = "h_" + identifier
+				const hashIdentifier = prefix + (capitalise ? identifier.toUpperCase() : identifier)
 
-				addHashDeclaration(editor, editBuilder, hashIdentifier, stringDoubleQuoted)
+				if (hashDeclarationAlreadyExists(editor, hashIdentifier)) { return }
+
+				insertLocalHashDeclaration(editor, editBuilder, hashIdentifier, stringDoubleQuoted)
 
 				replaceInDocument(editor, editBuilder, stringDoubleQuoted, hashIdentifier)
 				replaceInDocument(editor, editBuilder, stringSingleQuoted, hashIdentifier)
