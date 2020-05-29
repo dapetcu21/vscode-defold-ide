@@ -90,7 +90,7 @@ function insertModuleHashDeclaration(document: TextDocument, fileUri: Uri, edit:
 
 		// Try inserting the declaration before return
 		if (insertPoint === -1) {
-			const match = text.match(/return\s+M/)
+			const match = text.match(/return\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/)
 			if (match) {
 				insertPoint = match.index
 				newlinesBefore = 0
