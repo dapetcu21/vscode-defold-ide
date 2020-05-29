@@ -14,8 +14,14 @@ Up-to-date autocomplete, API docs, snippets and more for the Defold game engine.
 
 > TODO. Not implemented yet, but planned.
 
-### Refactor hashes
+### Refactor hashes as constants
 
-Replaces strings and literal hashes with a local variables declared at the top of the file. Select or place your cursor on a hash string, then press `Ctrl+Shift+H`.
+Replaces strings and literal hashes with a local variables declared at the
+top of the file. Select or place your cursor on a hash string, then press
+`Ctrl+Shift+H`.
 
 ![refactor hashes](images/refactor-hash.gif)
+
+If your project doesn't use this style of hash constants, you can customise
+prefix, capitalisation and even make Defold IDE create hash constants in
+a separate module instead of using local variables.
