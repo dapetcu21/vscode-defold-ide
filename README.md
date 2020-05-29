@@ -16,7 +16,7 @@ Up-to-date autocomplete, API docs, snippets and more for the Defold game engine.
 
 ### Refactor hashes as constants
 
-Replaces strings and literal hashes with a local variables declared at the
+Replaces strings and literal hashes with local variables declared at the
 top of the file. Select or place your cursor on a hash string, then press
 `Ctrl+Shift+H`.
 
