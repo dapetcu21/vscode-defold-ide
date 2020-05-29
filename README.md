@@ -25,3 +25,6 @@ top of the file. Select or place your cursor on a hash string, then press
 If your project doesn't use this style of hash constants, you can customise
 prefix, capitalisation and even make Defold IDE create hash constants in
 a separate module instead of using local variables.
+
+Don't forget that you can also configure VSCode settings per-workspace. 
+Different projects can configure this extension differently.
