@@ -1,9 +1,14 @@
-const vscode = require('vscode');
+import { 
+	Range, 
+	ExtensionContext, 
+	TextEditor,
+	TextEditorEdit,
+	commands, 
+	window, 
+	workspace
+} from 'vscode'
 
-/**
- * @param {string} s
- */
-function escapeLua(s) {
+function escapeLua(s: string) {
 	return s
 		.replace(/\r/g, '\\r')
 		.replace(/\n/g, '\\n')
@@ -14,13 +19,7 @@ function escapeLua(s) {
 		.replace(/"/g, '\\\"')
 }
 
-/**
- * @param {import("vscode").TextEditor} editor
- * @param {import("vscode").TextEditorEdit} editBuilder
- * @param {string} hashIdentifier
- * @param {string | any[]} string
- */
-function insertLocalHashDeclaration(editor, editBuilder, hashIdentifier, string) {
+function insertLocalHashDeclaration(editor: TextEditor, editBuilder: TextEditorEdit, hashIdentifier: string, string: string) {
 	const text = editor.document.getText()
 
 	let insertPoint = -1
@@ -61,13 +60,7 @@ function insertLocalHashDeclaration(editor, editBuilder, hashIdentifier, string)
 	editBuilder.insert(editor.document.positionAt(insertPoint), insertString)
 }
 
-/**
- * @param {import("vscode").TextEditor} editor
- * @param {import("vscode").TextEditorEdit} editBuilder
- * @param {string} from
- * @param {string} to
- */
-function replaceInDocument(editor, editBuilder, from, to) {
+function replaceInDocument(editor: TextEditor, editBuilder: TextEditorEdit, from: string, to: string) {
 	let searchStart = 0
 	while (true) {
 		const text = editor.document.getText()
@@ -95,7 +88,7 @@ function replaceInDocument(editor, editBuilder, from, to) {
 		}
 
 		editBuilder.replace(
-			new vscode.Range(
+			new Range(
 				editor.document.positionAt(startPos),
 				editor.document.positionAt(endPos),
 			),
@@ -105,21 +98,18 @@ function replaceInDocument(editor, editBuilder, from, to) {
 	}
 }
 
-function hashDeclarationAlreadyExists(editor, hashIdentifier) {
+function hashDeclarationAlreadyExists(editor: TextEditor, hashIdentifier: string) {
 	const text = editor.document.getText()
 	return new RegExp(`(^|\\n)local\\s+${hashIdentifier}\\s*=\\s*hash\\(`).test(text)
 }
 
-/**
- * @param {import("vscode").ExtensionContext} context
- */
-function registerRefactorHashCommand(context) {
-	let disposable = vscode.commands.registerCommand('defold-ide.refactorHash', function () {
-		const editor = vscode.window.activeTextEditor
+function registerRefactorHashCommand(context: ExtensionContext) {
+	let disposable = commands.registerCommand('defold-ide.refactorHash', function () {
+		const editor = window.activeTextEditor
 		if (!editor) { return }
 
-		const config = vscode.workspace.getConfiguration("defoldIDE.refactorHash")
-		const prefix = config.get("prefix")
+		const config = workspace.getConfiguration("defoldIDE.refactorHash")
+		const prefix: string = config.get("prefix")
 		const capitalise = config.get("capitalise")
 
         const hashes = []
@@ -133,7 +123,7 @@ function registerRefactorHashCommand(context) {
 			let word = editor.document.getText(wordSelection)
 				.replace(/^['"]|['"]$/g, '')
 
-			if (prefix && word.substr(0, prefix.length) == prefix) {
+			if (prefix && word.substr(0, prefix.length) === prefix) {
 				word = word.substr(prefix.length)
 			}
 
@@ -158,9 +148,9 @@ function registerRefactorHashCommand(context) {
 				replaceInDocument(editor, editBuilder, stringSingleQuoted, hashIdentifier)
 			})
 		})
-	});
+	})
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(disposable)
 }
 
-module.exports = registerRefactorHashCommand
+export default registerRefactorHashCommand
