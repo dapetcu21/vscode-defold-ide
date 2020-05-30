@@ -55,6 +55,11 @@
 			}
 		}
 	},
+	"extensionDependencies": [
+		"sumneko.lua",
+        "thesofakillers.vscode-pbtxt",
+        "slevesque.shader"
+	],
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
