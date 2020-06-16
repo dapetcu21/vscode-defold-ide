@@ -254,6 +254,7 @@ function registerRefactorHashCommand(context: ExtensionContext) {
 			hashIdentifier: string, 
 			stringSingleQuoted: string, 
 			stringDoubleQuoted: string,
+			shouldDeclare: boolean,
 		}[] = []
 		editor.selections.forEach(selection => {
 			const wordSelection = selection.isEmpty
@@ -276,18 +277,20 @@ function registerRefactorHashCommand(context: ExtensionContext) {
 			const identifier = hash.replace(/[^0-9a-zA-Z_]/g, '_')
 			const hashIdentifier = prefix + (capitalise ? identifier.toUpperCase() : identifier)
 
-			if (hashDeclarationAlreadyExists(document, hashIdentifier, moduleDocument)) { return }
+			const shouldDeclare = !hashDeclarationAlreadyExists(document, hashIdentifier, moduleDocument)
 
-			hashes.push({ hash, hashIdentifier, stringSingleQuoted, stringDoubleQuoted })
+			hashes.push({ hash, hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare })
         })
         
 		if (!hashes.length) { return }
 
-		hashes.forEach(({ hashIdentifier, stringSingleQuoted, stringDoubleQuoted }) => {
-			if (modulePath) {
-				insertModuleRequire(document, edit, modulePath, moduleRequireBinding)
-			} else {
-				insertLocalHashDeclaration(document, edit, hashIdentifier, stringDoubleQuoted)
+		hashes.forEach(({ hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare }) => {
+			if (shouldDeclare) {
+				if (modulePath) {
+					insertModuleRequire(document, edit, modulePath, moduleRequireBinding)
+				} else {
+					insertLocalHashDeclaration(document, edit, hashIdentifier, stringDoubleQuoted)
+				}
 			}
 
 			const identifier = modulePath ? `${moduleRequireBinding}.${hashIdentifier}` : hashIdentifier
