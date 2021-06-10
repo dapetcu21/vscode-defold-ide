@@ -1,10 +1,10 @@
 // eslint-disable-next-line no-unused-vars
-import * as vscode from 'vscode'
+import * as vscode from "vscode";
 
-import registerRefactorHashCommand from './commandRefactorHash'
+import registerRefactorHashCommand from "./commandRefactorHash";
 
 export function activate(context: vscode.ExtensionContext) {
-	registerRefactorHashCommand(context)
+  registerRefactorHashCommand(context);
 }
 
 export function deactivate() {}
