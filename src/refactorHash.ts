@@ -1,18 +1,17 @@
-import { 
-	Range, 
-	ExtensionContext, 
-	TextEditor,
-	TextEditorEdit,
-	commands, 
-	window, 
-	workspace,
-	Uri,
-	WorkspaceEdit,
-	TextDocument,
-	Position,
-} from 'vscode'
-import { fileURLToPath } from 'url'
-import { promises as fspromises } from 'fs'
+export type Insertion = {
+  type: 'insert',
+  text: string,
+  offset: number,
+}
+
+export type Replacement = {
+  type: 'replace',
+  text: string,
+  startOffset: number,
+  endOffset: number,
+}
+
+export type Edit = Insertion | Replacement
 
 function escapeLua(s: string) {
 	return s
@@ -25,9 +24,7 @@ function escapeLua(s: string) {
 		.replace(/"/g, '\\\"')
 }
 
-function insertLocalHashDeclaration(document: TextDocument, edit: WorkspaceEdit, hashIdentifier: string, string: string) {
-	const text = document.getText()
-
+function insertLocalHashDeclaration(text: string, hashIdentifier: string, string: string): Insertion | null {
 	let insertPoint = -1
 	let newlinesBefore = 0
 	let newlinesAfter = 0
@@ -36,7 +33,7 @@ function insertLocalHashDeclaration(document: TextDocument, edit: WorkspaceEdit,
 	// @ts-ignore
 	for (const match of text.matchAll(/(^|\n)local [a-zA-Z_][0-9a-zA-Z_]* = hash\(("[^\r\n]*)/g)) {
 		if (match[2].substring(0, string.length) === string) {
-			return
+      return null
 		}
 		insertPoint = match.index + match[0].length
 		newlinesBefore = 1
@@ -59,29 +56,29 @@ function insertLocalHashDeclaration(document: TextDocument, edit: WorkspaceEdit,
 		newlinesAfter = 2
 	}
 
-	const insertString = '\n'.repeat(newlinesBefore) +
-		`local ${hashIdentifier} = hash(${string})` +
-		'\n'.repeat(newlinesAfter)
-	edit.insert(document.uri, document.positionAt(insertPoint), insertString)
+	const insertString =
+    "\n".repeat(newlinesBefore) +
+    `local ${hashIdentifier} = hash(${string})` +
+    "\n".repeat(newlinesAfter);
+
+  return { type: "insert", text: insertString, offset: insertPoint };
 }
 
-function insertModuleHashDeclaration(document: TextDocument | undefined, fileUri: Uri, edit: WorkspaceEdit, hashIdentifier: string, string: string, fileDoesNotExist: boolean) {
+function insertModuleHashDeclaration(text: string, hashIdentifier: string, string: string): Insertion | null {
 	let insertPoint = -1
 	let newlinesBefore = 0
 	let newlinesAfter = 0
 
-	if (fileDoesNotExist) {
+	if (!text) {
 		insertPoint = 0
 		newlinesBefore = 0
 		newlinesAfter = 1
-	} else if (document) {
-		const text = document.getText()
-
+	} else {
 		// Try inserting the declaration after existing declarations
 		// @ts-ignore
 		for (const match of text.matchAll(/(^|\n)M\.[a-zA-Z_][0-9a-zA-Z_]* = hash\(("[^\r\n]*)/g)) {
 			if (match[2].substring(0, string.length) === string) {
-				return
+				return null
 			}
 			insertPoint = match.index + match[0].length
 			newlinesBefore = 1
@@ -99,7 +96,7 @@ function insertModuleHashDeclaration(document: TextDocument | undefined, fileUri
 		}
 
 		if (insertPoint === -1) {
-			insertPoint = document.offsetAt(document.validatePosition(new Position(Infinity, Infinity)))
+			insertPoint = text.length
 			newlinesBefore = 1
 			newlinesAfter = 0
 		}
@@ -108,12 +105,11 @@ function insertModuleHashDeclaration(document: TextDocument | undefined, fileUri
 	const insertString = '\n'.repeat(newlinesBefore) +
 		`M.${hashIdentifier} = hash(${string})` +
 		'\n'.repeat(newlinesAfter)
-	edit.insert(fileUri, document ? document.positionAt(insertPoint) : new Position(0, 0), insertString)
+
+  return { type: 'insert', text: insertString, offset: insertPoint }
 }
 
-function insertModuleRequire(document: TextDocument, edit: WorkspaceEdit, modulePath: string, moduleRequireBinding: string) {
-	const text = document.getText()
-
+function insertModuleRequire(text: string, modulePath: string, moduleRequireBinding: string): Edit | null {
 	let insertPoint = -1
 	let newlinesBefore = 0
 	let newlinesAfter = 0
@@ -122,7 +118,7 @@ function insertModuleRequire(document: TextDocument, edit: WorkspaceEdit, module
 	if (insertPoint === -1) {
 		// @ts-ignore
 		for (const match of text.matchAll(/local\s+([a-zA-Z_][0-9a-zA-Z_]*)\s*=\s*require(\(|\s)[^\r\n]*/g)) {
-			if (match[1] === moduleRequireBinding) { return }
+			if (match[1] === moduleRequireBinding) { return null }
 			insertPoint = match.index + match[0].length
 			newlinesBefore = 1
 			newlinesAfter = 0
@@ -143,12 +139,12 @@ function insertModuleRequire(document: TextDocument, edit: WorkspaceEdit, module
 	const insertString = '\n'.repeat(newlinesBefore) +
 		`local ${moduleRequireBinding} = require "${luaPath}"` +
 		'\n'.repeat(newlinesAfter)
-	edit.insert(document.uri, document.positionAt(insertPoint), insertString)
+
+  return { type: 'insert', text: insertString, offset: insertPoint }
 }
 
-function replaceInDocument(document: TextDocument, edit: WorkspaceEdit, from: string, to: string) {
+function replaceInDocument(text: string, edits: Edit[], from: string, to: string) {
 	let searchStart = 0
-	const text = document.getText()
 	while (true) {
 		const index = text.indexOf(from, searchStart)
 		if (index < 0) { break }
@@ -173,150 +169,93 @@ function replaceInDocument(document: TextDocument, edit: WorkspaceEdit, from: st
 			}
 		}
 
-		edit.replace(
-			document.uri,
-			new Range(
-				document.positionAt(startPos),
-				document.positionAt(endPos),
-			),
-			to
-		)
+    edits.push({ type: "replace", text: to, startOffset: startPos, endOffset: endPos })
 		searchStart = endPos
 	}
 }
 
-function hashDeclarationAlreadyExists(document: TextDocument, hashIdentifier: string, moduleDocument?: TextDocument) {
-	if (moduleDocument) {
-		const text = moduleDocument.getText()
-		return new RegExp(`(^|\\n)M\\.${hashIdentifier}\\s*=\\s*hash\\(`).test(text)
+function hashDeclarationAlreadyExists(documentText: string, hashIdentifier: string, moduleText?: string) {
+	if (moduleText) {
+		return new RegExp(`(^|\\n)M\\.${hashIdentifier}\\s*=\\s*hash\\(`).test(moduleText)
 	}
-	const text = document.getText()
-	return new RegExp(`(^|\\n)local\\s+${hashIdentifier}\\s*=\\s*hash\\(`).test(text)
+	return new RegExp(`(^|\\n)local\\s+${hashIdentifier}\\s*=\\s*hash\\(`).test(documentText)
 }
 
-async function getModuleUri(modulePath: string, editor: TextEditor) {
-	let workspaceFolder = (workspace.workspaceFolders && workspace.workspaceFolders.length === 1) 
-		? workspace.workspaceFolders[0] 
-		: null
-
-	if (!editor.document.isUntitled) {
-		workspaceFolder = workspace.getWorkspaceFolder(editor.document.uri) || workspaceFolder
-	}
-
-	if (!workspaceFolder) {
-		window.showErrorMessage("It's ambiguous which workspace folder defoldIDE.refactorHash.modulePath refers to. Save this file first.")
-		return null
-	}
-
-	const workspaceUri = workspaceFolder.uri
-	return Uri.parse(workspaceUri.toString() + (workspaceUri.path.endsWith('/') ? '' : '/') + modulePath)
+function addEdit(edits: Edit[], edit: Edit | null | undefined) {
+  if (edit) {
+    edits.push(edit)
+  }
 }
 
-function registerRefactorHashCommand(context: ExtensionContext) {
-	let disposable = commands.registerCommand('defold-ide.refactorHash', async function () {
-		const editor = window.activeTextEditor
-		if (!editor) { return }
+export function refactorHashes(selections: string[], documentText: string, moduleText: string, options: {
+  prefix: string,
+  capitalise: boolean,
+  modulePath: string,
+  moduleRequireBinding: string,
+}): { documentEdits: Edit[], moduleEdits: Edit[] } {
+  const { prefix, capitalise, modulePath, moduleRequireBinding } = options
 
-		const document = editor.document
+  const hashes: { 
+    hash: string, 
+    hashIdentifier: string, 
+    stringSingleQuoted: string, 
+    stringDoubleQuoted: string,
+    shouldDeclare: boolean,
+  }[] = []
 
-		const config = workspace.getConfiguration("defoldIDE.refactorHash")
-		const prefix: string = config.get("prefix") || ''
-		const capitalise: boolean = !!config.get("capitalise")
-		const modulePath: string = config.get("modulePath") || ''
-		const moduleRequireBinding: string = config.get("moduleRequireBinding") || 'h'
+  const documentEdits: Edit[] = []
+  const moduleEdits: Edit[] = []
 
-		const edit = new WorkspaceEdit()
+  selections.forEach(selection => {
+    let hash = selection.replace(/^['"]|['"]$/g, '')
 
-		let moduleUri: Uri | null = null
-		let moduleDocument: TextDocument | undefined = undefined
-		let fileDoesNotExist = false
-		if (modulePath) {
-			moduleUri = await getModuleUri(modulePath, editor)
-			if (!moduleUri) { return }
+    if (prefix && hash.substr(0, prefix.length) === prefix) {
+      hash = hash.substr(prefix.length)
+    }
 
-			if (moduleUri.scheme === "file") {
-				try {
-					if (!(await fspromises.stat(moduleUri.fsPath)).isFile()) {
-						fileDoesNotExist = true
-					}
-				} catch (err) {
-					fileDoesNotExist = true
-				}
-			} 
+    if (hashes.find(item => item.hash === hash)) { return }
 
-			if (!fileDoesNotExist) {
-				moduleDocument = await workspace.openTextDocument(moduleUri)
-			}
-		}
+    const stringDoubleQuoted = '"' + escapeLua(hash) + '"'
+    const stringSingleQuoted = '\'' + escapeLua(hash) + '\''
+    const identifier = hash.replace(/[^0-9a-zA-Z_]/g, '_')
+    const hashIdentifier = prefix + (capitalise ? identifier.toUpperCase() : identifier)
 
-		const hashes: { 
-			hash: string, 
-			hashIdentifier: string, 
-			stringSingleQuoted: string, 
-			stringDoubleQuoted: string,
-			shouldDeclare: boolean,
-		}[] = []
-		editor.selections.forEach(selection => {
-			const wordSelection = selection.isEmpty
-				? document.getWordRangeAtPosition(selection.start)
-                : selection
-                
-			if (!wordSelection || !wordSelection.isSingleLine) { return }
+    const shouldDeclare = !hashDeclarationAlreadyExists(documentText, hashIdentifier, moduleText)
 
-			let hash = document.getText(wordSelection)
-				.replace(/^['"]|['"]$/g, '')
+    hashes.push({ hash, hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare })
+  })
+      
+  if (!hashes.length) { 
+    return { documentEdits, moduleEdits }
+  }
 
-			if (prefix && hash.substr(0, prefix.length) === prefix) {
-				hash = hash.substr(prefix.length)
-			}
+  hashes.forEach(({ hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare }) => {
+    if (shouldDeclare) {
+      if (modulePath) {
+        addEdit(documentEdits, insertModuleRequire(documentText, modulePath, moduleRequireBinding))
+      } else {
+        addEdit(documentEdits, insertLocalHashDeclaration(documentText, hashIdentifier, stringDoubleQuoted))
+      }
+    }
 
-			if (hashes.find(item => item.hash === hash)) { return }
+    const identifier = modulePath ? `${moduleRequireBinding}.${hashIdentifier}` : hashIdentifier
+    replaceInDocument(documentText, documentEdits, stringDoubleQuoted, identifier)
+    replaceInDocument(documentText, documentEdits, stringSingleQuoted, identifier)
+  })
 
-			const stringDoubleQuoted = '"' + escapeLua(hash) + '"'
-			const stringSingleQuoted = '\'' + escapeLua(hash) + '\''
-			const identifier = hash.replace(/[^0-9a-zA-Z_]/g, '_')
-			const hashIdentifier = prefix + (capitalise ? identifier.toUpperCase() : identifier)
+  if (modulePath) {
+    if (!moduleText) {
+      moduleEdits.push({ type: "insert", offset: 0, text: "local M = {}\n\n" })
+    }
 
-			const shouldDeclare = !hashDeclarationAlreadyExists(document, hashIdentifier, moduleDocument)
+    hashes.forEach(({ hashIdentifier, stringDoubleQuoted }) => {
+      insertModuleHashDeclaration(moduleText, hashIdentifier, stringDoubleQuoted)
+    })
 
-			hashes.push({ hash, hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare })
-        })
-        
-		if (!hashes.length) { return }
+    if (!moduleText) {
+      moduleEdits.push({ type: "insert", offset: 0, text: "\nreturn M\n" })
+    }
+  }
 
-		hashes.forEach(({ hashIdentifier, stringSingleQuoted, stringDoubleQuoted, shouldDeclare }) => {
-			if (shouldDeclare) {
-				if (modulePath) {
-					insertModuleRequire(document, edit, modulePath, moduleRequireBinding)
-				} else {
-					insertLocalHashDeclaration(document, edit, hashIdentifier, stringDoubleQuoted)
-				}
-			}
-
-			const identifier = modulePath ? `${moduleRequireBinding}.${hashIdentifier}` : hashIdentifier
-			replaceInDocument(document, edit, stringDoubleQuoted, identifier)
-			replaceInDocument(document, edit, stringSingleQuoted, identifier)
-		})
-		
-		if (moduleUri) {
-			if (fileDoesNotExist) {
-				edit.createFile(moduleUri)
-				edit.insert(moduleUri, new Position(0, 0), "local M = {}\n\n")
-			}
-
-			hashes.forEach(({ hashIdentifier, stringDoubleQuoted }) => {
-				insertModuleHashDeclaration(moduleDocument, (moduleUri as Uri), edit, hashIdentifier, stringDoubleQuoted, fileDoesNotExist)
-			})
-
-			if (fileDoesNotExist) {
-				edit.insert(moduleUri, new Position(0, 0), "\nreturn M\n")
-			}
-		}
-
-		await workspace.applyEdit(edit)
-	})
-
-	context.subscriptions.push(disposable)
+  return { documentEdits, moduleEdits }
 }
-
-export default registerRefactorHashCommand
