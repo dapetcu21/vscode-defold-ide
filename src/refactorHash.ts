@@ -109,10 +109,11 @@ function insertModuleHashDeclaration(
       }
     }
 
+    // Try inserting the declaration at the beginning
     if (insertPoint === -1) {
-      insertPoint = text.length;
-      newlinesBefore = 1;
-      newlinesAfter = 0;
+      insertPoint = 0;
+      newlinesBefore = 0;
+      newlinesAfter = 1;
     }
   }
 
@@ -335,20 +336,27 @@ export function refactorHashes(
   );
 
   if (modulePath) {
-    if (!moduleText) {
+    if (!moduleText.match(/local\s*M\s*=\s*{}/)) {
       moduleEdits.push({ type: "insert", offset: 0, text: "local M = {}\n\n" });
     }
 
     hashes.forEach(({ hashIdentifier, stringDoubleQuoted }) => {
-      insertModuleHashDeclaration(
-        moduleText,
-        hashIdentifier,
-        stringDoubleQuoted
+      addEdit(
+        moduleEdits,
+        insertModuleHashDeclaration(
+          moduleText,
+          hashIdentifier,
+          stringDoubleQuoted
+        )
       );
     });
 
-    if (!moduleText) {
-      moduleEdits.push({ type: "insert", offset: 0, text: "\nreturn M\n" });
+    if (!moduleText.match(/return\sM/)) {
+      moduleEdits.push({
+        type: "insert",
+        offset: moduleText === "\n" ? 0 : moduleText.length,
+        text: `\nreturn M${moduleText === "\n" ? "" : "\n"}`,
+      });
     }
   }
 
