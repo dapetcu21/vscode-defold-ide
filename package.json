@@ -3,7 +3,7 @@
 	"publisher": "dapetcu21",
 	"displayName": "Defold IDE",
 	"description": "Up-to-date autocomplete, API docs, snippets and more for the Defold game engine",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"engines": {
 		"vscode": "^1.45.0"
 	},
